@@ -47,9 +47,9 @@ const fetchData = async (symbol) => {
 };
 
 const symbols = ["BTC", "ETH", "USDT"];
-// symbols.forEach((symbol) => {
-//   cron.schedule("*/5 * * * * *", () => fetchData(symbol));
-// });
+symbols.forEach((symbol) => {
+  cron.schedule("*/5 * * * * *", () => fetchData(symbol));
+});
 
 app.get("/api/getData/:symbol", async (req, res) => {
   const { symbol } = req.params;
