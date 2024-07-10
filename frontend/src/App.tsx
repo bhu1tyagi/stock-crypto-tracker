@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
 import axios from "axios";
 import {
   Button,
@@ -9,69 +10,73 @@ import {
   Dropdown,
 } from "react-bootstrap";
 import "bootstrap/dist/css/bootstrap.min.css";
+import {
+  fetchData,
+  selectData,
+  selectSymbols,
+  selectCurrentSymbol,
+  selectShow,
+  selectPage,
+  selectTotalPages,
+  setCurrentSymbol,
+  setShow,
+  setPage,
+  setSymbols,
+} from "./redux/dataSlice";
+import { AppDispatch } from "./redux/store";
 
 function App() {
-  const [data, setData] = useState([]);
-  const [symbols, setSymbols] = useState([]);
-  const [currentSymbol, setCurrentSymbol] = useState("");
-  const [show, setShow] = useState(false);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
-  const intervalId = useRef(null);
-
-  const fetchData = useCallback(
-    async (symbol) => {
-      try {
-        const response = await axios.get(
-          `http://localhost:3001/api/getData/${symbol}`,
-          {
-            params: { limit: 10, page },
-          }
-        );
-        setData(response.data.data);
-        setTotalPages(response.data.pages);
-      } catch (error) {
-        console.error("Error fetching data", error);
-      }
-    },
-    [page]
-  ); // Include 'page' as dependency
-
-  const fetchSymbols = async () => {
-    try {
-      const response = await axios.get("http://localhost:3001/api/symbols");
-      setSymbols(response.data);
-    } catch (error) {
-      console.error("Error fetching symbols", error);
-    }
-  };
-
-  const handleSymbolChange = (symbol, event) => {
-    event.preventDefault();
-    setCurrentSymbol(symbol);
-    setShow(false);
-  };
+  const data = useSelector(selectData);
+  const symbols = useSelector(selectSymbols);
+  const currentSymbol = useSelector(selectCurrentSymbol);
+  const show = useSelector(selectShow);
+  const page = useSelector(selectPage);
+  const totalPages = useSelector(selectTotalPages);
+  const dispatch = useDispatch<AppDispatch>();
 
   useEffect(() => {
+    const fetchDataForSymbol = () => {
+      dispatch(fetchData({ symbol: currentSymbol, page }));
+    };
+
+    fetchDataForSymbol();
+
+    const interval = setInterval(fetchDataForSymbol, 2000);
+
+    return () => clearInterval(interval);
+  }, [dispatch, currentSymbol, page]);
+
+  useEffect(() => {
+    const fetchSymbols = async () => {
+      try {
+        const response = await axios.get<string[]>(
+          "http://localhost:3001/api/symbols"
+        );
+        dispatch(setSymbols(response.data));
+      } catch (error) {
+        console.error("Error fetching symbols", error);
+      }
+    };
     fetchSymbols();
-    fetchData(currentSymbol);
+  }, [dispatch]); // Fetch symbols once on mount
 
-    clearInterval(intervalId.current);
-    intervalId.current = setInterval(() => {
-      fetchData(currentSymbol);
-    }, 5000);
-
-    return () => clearInterval(intervalId.current);
-  }, [currentSymbol, page, fetchData]);
+  const handleSymbolChange = (
+    symbol: string,
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    event.preventDefault();
+    dispatch(setCurrentSymbol(symbol));
+    dispatch(setShow(false));
+  };
 
   return (
     <div className="container mt-5">
-      <h1>{currentSymbol} Data Tracker</h1>
-      <Button variant="primary" onClick={() => setShow(true)}>
+      <h1>{currentSymbol || "Select a Symbol"} Data Tracker</h1>
+      <Button variant="primary" onClick={() => dispatch(setShow(true))}>
         Change Symbol
       </Button>
 
-      <Modal show={show} onHide={() => setShow(false)}>
+      <Modal show={show} onHide={() => dispatch(setShow(false))}>
         <Modal.Header closeButton>
           <Modal.Title>Change Symbol</Modal.Title>
         </Modal.Header>
@@ -87,7 +92,9 @@ function App() {
                   <Dropdown.Item
                     as="button"
                     key={sym}
-                    onClick={(e) => handleSymbolChange(sym, e)}
+                    onClick={(e: React.MouseEvent<HTMLButtonElement>) =>
+                      handleSymbolChange(sym, e)
+                    }
                   >
                     {sym}
                   </Dropdown.Item>
@@ -97,7 +104,7 @@ function App() {
           </Form>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShow(false)}>
+          <Button variant="secondary" onClick={() => dispatch(setShow(false))}>
             Close
           </Button>
         </Modal.Footer>
@@ -131,7 +138,7 @@ function App() {
       </Table>
       <div>
         <Button
-          onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+          onClick={() => dispatch(setPage(Math.max(page - 1, 1)))}
           disabled={page === 1}
         >
           Previous
@@ -141,9 +148,7 @@ function App() {
           Page {page} of {totalPages}{" "}
         </span>
         <Button
-          onClick={() =>
-            setPage((prev) => (prev < totalPages ? prev + 1 : totalPages))
-          }
+          onClick={() => dispatch(setPage(Math.min(page + 1, totalPages)))}
           disabled={page === totalPages}
         >
           Next
